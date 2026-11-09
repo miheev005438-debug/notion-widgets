@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Сегодня</title>
+<style>
+  :root{--bg:#10151f;--line:rgba(255,255,255,.07);--txt:#f3f5f9;--mut:#8b95a7;--acc:#8fb3ff;--acc2:#b79cff}
+  html,body{margin:0;padding:0;background:transparent;color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{display:flex;gap:14px;padding:6px 2px;box-sizing:border-box;width:100%}
+  .card{flex:1 1 0;min-width:0;background:linear-gradient(160deg,#141b28 0%,#0d121b 100%);
+    border:1px solid var(--line);border-radius:18px;padding:22px 26px;box-sizing:border-box;
+    min-height:212px;display:flex;align-items:center}
+  .day{display:flex;gap:26px;align-items:center;width:100%}
+  .ring{flex:0 0 auto;position:relative;width:132px;height:132px}
+  .ring svg{width:132px;height:132px;transform:rotate(-90deg)}
+  .ring .pct{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .ring .pct b{font-size:30px;font-weight:700;letter-spacing:-.5px}
+  .ring .pct span{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:1.2px;margin-top:2px}
+  .info{min-width:0}
+  .wd{font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:2.4px}
+  .date{font-size:46px;font-weight:700;letter-spacing:-1px;line-height:1.05;margin:6px 0 8px;white-space:nowrap}
+  .meta{font-size:15px;color:#c8d0dc;line-height:1.55}
+  .meta em{font-style:normal;color:var(--txt);font-weight:600}
+  .shift{display:inline-block;margin-top:8px;font-size:13px;padding:4px 10px;border-radius:999px;
+    background:rgba(143,179,255,.12);color:#cfdcff;border:1px solid rgba(143,179,255,.25)}
+  .clock{flex-direction:column;justify-content:center;align-items:center;text-align:center}
+  .tz{font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:2.4px}
+  .time{font-size:66px;font-weight:700;letter-spacing:-1px;line-height:1;margin:10px 0 8px;font-variant-numeric:tabular-nums}
+  .time small{font-size:26px;color:var(--mut);font-weight:600;margin-left:4px}
+  .sub{font-size:14px;color:#c8d0dc}
+  @media (max-width:620px){
+    .wrap{flex-direction:column}
+    .card{flex:0 0 auto;min-height:0;padding:18px 20px}
+    .day{gap:18px}
+    .date{font-size:36px}
+    .time{font-size:52px}
+    .ring,.ring svg{width:108px;height:108px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card"><div class="day">
+    <div class="ring">
+      <svg viewBox="0 0 120 120">
+        <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#8fb3ff"/><stop offset="100%" stop-color="#b79cff"/></linearGradient></defs>
+        <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="10"/>
+        <circle id="arc" cx="60" cy="60" r="52" fill="none" stroke="url(#g)" stroke-width="10"
+          stroke-linecap="round" stroke-dasharray="326.73" stroke-dashoffset="326.73"/>
+      </svg>
+      <div class="pct"><b id="pct">--%</b><span>года</span></div>
+    </div>
+    <div class="info">
+      <div class="wd" id="wd">--</div>
+      <div class="date" id="date">--</div>
+      <div class="meta" id="meta">--</div>
+      <div class="shift" id="shift" style="display:none"></div>
+    </div>
+  </div></div>
+  <div class="card clock" id="clockCard">
+    <div class="tz" id="tz">Форт Мак-Мюррей</div>
+    <div class="time" id="time">--:--</div>
+    <div class="sub" id="sub">--</div>
+  </div>
+</div>
+<script>
+(function(){
+  var q = new URLSearchParams(location.search);
+  var TZ = q.get('tz') || 'America/Edmonton';
+  var H12 = q.get('h12') === '1';
+  var SHIFT = q.get('shift');              // первый день любой вахты, ГГГГ-ММ-ДД
+  var ON = parseInt(q.get('on') || '7', 10), OFF = parseInt(q.get('off') || '7', 10);
+  if (q.get('mode') === 'date') document.getElementById('clockCard').style.display = 'none';
+  if (q.get('city')) document.getElementById('tz').textContent = q.get('city');
+
+  function parts(d){
+    var f = new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
+    var o = {}; f.formatToParts(d).forEach(function(p){ o[p.type] = p.value; });
+    return {y:+o.year, m:+o.month, d:+o.day, h:+o.hour, mi:+o.minute, s:+o.second};
+  }
+  function dayNum(y,m,d){ return Math.round(Date.UTC(y,m-1,d)/86400000); }
+  function plural(n, a, b, c){ var n10=n%10, n100=n%100;
+    if(n10===1 && n100!==11) return a; if(n10>=2 && n10<=4 && (n100<12 || n100>14)) return b; return c; }
+  function isoWeek(y,m,d){ var t = new Date(Date.UTC(y,m-1,d)); var dn = (t.getUTCDay()+6)%7;
+    t.setUTCDate(t.getUTCDate()-dn+3); var fy = t.getUTCFullYear(); var ft = new Date(Date.UTC(fy,0,4));
+    return 1 + Math.round(((t - ft)/86400000 - 3 + ((ft.getUTCDay()+6)%7))/7); }
+  function pad(n){ return (n<10?'0':'') + n; }
+
+  function tick(){
+    var now = new Date(), p = parts(now);
+    var start = dayNum(p.y,1,1), next = dayNum(p.y+1,1,1), today = dayNum(p.y,p.m,p.d);
+    var total = next - start;
+    var frac = ((today - start) + (p.h*3600 + p.mi*60 + p.s)/86400) / total;
+    var pct = Math.min(100, Math.max(0, frac*100));
+    document.getElementById('pct').textContent = Math.round(pct) + '%';
+    document.getElementById('arc').setAttribute('stroke-dashoffset', (326.73*(1-pct/100)).toFixed(2));
+
+    var wd = new Intl.DateTimeFormat('ru-RU',{timeZone:TZ,weekday:'long'}).format(now);
+    var dm = new Intl.DateTimeFormat('ru-RU',{timeZone:TZ,day:'numeric',month:'long'}).format(now);
+    document.getElementById('wd').textContent = wd;
+    document.getElementById('date').textContent = dm;
+    var left = next - today;
+    document.getElementById('meta').innerHTML = p.y + ' · неделя <em>' + isoWeek(p.y,p.m,p.d) + '</em><br>До Нового года <em>' +
+      left + ' ' + plural(left,'день','дня','дней') + '</em>';
+
+    if (SHIFT && /^\d{4}-\d{2}-\d{2}$/.test(SHIFT)) {
+      var a = SHIFT.split('-'), cyc = ON + OFF;
+      var k = ((today - dayNum(+a[0],+a[1],+a[2])) % cyc + cyc) % cyc, el = document.getElementById('shift');
+      el.style.display = 'inline-block';
+      el.textContent = k < ON ? ('На вахте · день ' + (k+1) + ' из ' + ON)
+        : ('Дома · до вахты ' + (cyc-k) + ' ' + plural(cyc-k,'день','дня','дней'));
+    }
+
+    var hh = p.h, suf = '';
+    if (H12) { suf = hh < 12 ? ' AM' : ' PM'; hh = hh % 12 || 12; }
+    document.getElementById('time').innerHTML = pad(hh) + ':' + pad(p.mi) + '<small>' + pad(p.s) + suf + '</small>';
+    var off = '';
+    try { off = new Intl.DateTimeFormat('en-US',{timeZone:TZ,timeZoneName:'shortOffset'}).formatToParts(now)
+      .filter(function(x){return x.type==='timeZoneName';})[0].value.replace('GMT','UTC').replace('-','−'); } catch(e) {}
+    document.getElementById('sub').textContent = 'Альберта' + (off ? ' · ' + off : '');
+  }
+  tick(); setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>
